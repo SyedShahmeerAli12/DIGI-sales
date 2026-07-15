@@ -14,6 +14,15 @@ function formatTime() {
   return new Date().toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
 }
 
+// crypto.randomUUID() requires a secure context (HTTPS or localhost) — this app
+// is also served over plain HTTP on a VPS IP, so it needs a fallback.
+function generateId() {
+  if (typeof crypto !== "undefined" && crypto.randomUUID) {
+    return crypto.randomUUID();
+  }
+  return `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+}
+
 export default function Home() {
   const router = useRouter();
   const [checkingAuth, setCheckingAuth] = useState(true);
@@ -30,13 +39,13 @@ export default function Home() {
 
   const handleSend = (text: string) => {
     const userMessage: ChatMessage = {
-      id: crypto.randomUUID(),
+      id: generateId(),
       sender: "user",
       text,
       timestamp: formatTime(),
     };
 
-    const assistantId = crypto.randomUUID();
+    const assistantId = generateId();
     const assistantPlaceholder: ChatMessage = {
       id: assistantId,
       sender: "assistant",

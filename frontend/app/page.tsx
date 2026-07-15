@@ -28,6 +28,7 @@ export default function Home() {
   const [checkingAuth, setCheckingAuth] = useState(true);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [isResponding, setIsResponding] = useState(false);
+  const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
 
   useEffect(() => {
     if (!getToken()) {
@@ -89,14 +90,17 @@ export default function Home() {
   };
 
   if (checkingAuth) {
-    return <div className="flex h-screen items-center justify-center bg-bg-page" />;
+    return <div className="flex h-dvh items-center justify-center bg-bg-page" />;
   }
 
   return (
-    <div className="flex h-screen flex-col overflow-hidden bg-bg-page">
-      <Navbar />
+    <div className="flex h-dvh flex-col overflow-hidden bg-bg-page">
+      <Navbar onMenuClick={() => setMobileSidebarOpen(true)} />
       <div className="flex flex-1 overflow-hidden">
-        <Sidebar />
+        <Sidebar
+          mobileOpen={mobileSidebarOpen}
+          onClose={() => setMobileSidebarOpen(false)}
+        />
         <main className="flex flex-1 flex-col overflow-hidden">
           <ChatHeader />
           <ChatWindow messages={messages} />

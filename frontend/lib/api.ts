@@ -28,6 +28,46 @@ export async function login(email: string, password: string): Promise<string> {
   return data.token;
 }
 
+export async function transcribeAudio(blob: Blob): Promise<string> {
+  const token = getToken();
+  if (!token) throw new Error("Not authenticated.");
+
+  const formData = new FormData();
+  formData.append("audio", blob, "recording.webm");
+
+  const res = await fetch(`${API_BASE}/api/voice/transcribe`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}` },
+    body: formData,
+  });
+
+  if (!res.ok) {
+    throw new Error("Could not transcribe audio.");
+  }
+  const data = await res.json();
+  return data.text as string;
+}
+
+export async function speakText(text: string): Promise<string> {
+  const token = getToken();
+  if (!token) throw new Error("Not authenticated.");
+
+  const res = await fetch(`${API_BASE}/api/voice/speak`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({ text }),
+  });
+
+  if (!res.ok) {
+    throw new Error("Could not generate speech.");
+  }
+  const blob = await res.blob();
+  return URL.createObjectURL(blob);
+}
+
 interface StreamHandlers {
   onSources?: (sources: string[]) => void;
   onToken?: (text: string) => void;

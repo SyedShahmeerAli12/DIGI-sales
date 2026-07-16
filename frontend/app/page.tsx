@@ -38,12 +38,14 @@ export default function Home() {
     setCheckingAuth(false);
   }, [router]);
 
-  const handleSend = (text: string) => {
+  const handleSend = (text: string, audioUrl?: string) => {
     const userMessage: ChatMessage = {
       id: generateId(),
       sender: "user",
       text,
       timestamp: formatTime(),
+      isVoice: !!audioUrl,
+      audioUrl,
     };
 
     const assistantId = generateId();

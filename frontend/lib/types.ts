@@ -11,4 +11,6 @@ export interface ChatMessage {
   timestamp: string;
   sources?: SourceRef[];
   streaming?: boolean;
+  isVoice?: boolean;
+  audioUrl?: string;
 }

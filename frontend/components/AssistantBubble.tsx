@@ -1,10 +1,39 @@
-import { Bot } from "lucide-react";
+"use client";
+
+import { useRef, useState } from "react";
+import { Bot, Volume2, Loader2, Square } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import type { ChatMessage } from "@/lib/types";
+import { speakText } from "@/lib/api";
 import SourceChip from "./SourceChip";
 import MessageToolbar from "./MessageToolbar";
 
 export default function AssistantBubble({ message }: { message: ChatMessage }) {
+  const [voiceState, setVoiceState] = useState<"idle" | "loading" | "playing">("idle");
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+
+  const handleVoiceClick = async () => {
+    if (voiceState === "playing") {
+      audioRef.current?.pause();
+      setVoiceState("idle");
+      return;
+    }
+    if (voiceState === "loading" || !message.text.trim()) return;
+
+    setVoiceState("loading");
+    try {
+      const url = await speakText(message.text);
+      const audio = new Audio(url);
+      audioRef.current = audio;
+      audio.onended = () => setVoiceState("idle");
+      audio.onerror = () => setVoiceState("idle");
+      await audio.play();
+      setVoiceState("playing");
+    } catch {
+      setVoiceState("idle");
+    }
+  };
+
   return (
     <div className="flex animate-fade-in items-start gap-2.5">
       <span className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-brand-red">
@@ -60,6 +89,22 @@ export default function AssistantBubble({ message }: { message: ChatMessage }) {
             {message.timestamp}
           </span>
           <MessageToolbar text={message.text} />
+          {!message.streaming && message.text.trim() && (
+            <button
+              type="button"
+              onClick={handleVoiceClick}
+              aria-label={voiceState === "playing" ? "Stop voice playback" : "Play as voice"}
+              className="flex h-6 w-6 items-center justify-center rounded-btn text-text-secondary transition-colors hover:bg-bg-page hover:text-text-primary"
+            >
+              {voiceState === "loading" ? (
+                <Loader2 className="h-3 w-3 animate-spin" />
+              ) : voiceState === "playing" ? (
+                <Square className="h-3 w-3" />
+              ) : (
+                <Volume2 className="h-3 w-3" />
+              )}
+            </button>
+          )}
         </div>
       </div>
     </div>

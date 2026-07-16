@@ -4,7 +4,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.core.config import settings
-from app.routers import auth, chat
+from app.routers import auth, chat, voice
 from app.scripts.ingest import run_ingestion
 from app.services.vector_store import collection_exists, wait_for_qdrant
 
@@ -30,6 +30,7 @@ app.add_middleware(
 
 app.include_router(auth.router)
 app.include_router(chat.router)
+app.include_router(voice.router)
 
 
 @app.get("/api/health")

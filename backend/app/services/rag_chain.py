@@ -61,11 +61,7 @@ def _top_k_for(question: str) -> int:
     return 20 if any(kw in lowered for kw in BROAD_KEYWORDS) else 8
 
 
-# Retrieved chunks come from many different persona/category groups even for a
-# narrow question (hybrid search pulls in loosely related rows). Rather than
-# exposing that internal retrieval detail as a citation list, every answer is
-# attributed to the single source document all chunks were ingested from.
-CONSTANT_SOURCE = "Source Question.docx"
+SOURCE_LABEL = "Source Question.docx"
 
 
 def _rewrite_query(question: str) -> str:
@@ -85,6 +81,15 @@ def _format_docs(docs) -> str:
     return "\n\n---\n\n".join(doc.page_content for doc in docs)
 
 
+def _sources_for(docs) -> list[dict]:
+    """The top retrieval hit is the strongest match for the question, so the
+    citation points at its exact page in source_questions_qa.pdf."""
+    if not docs:
+        return [{"label": SOURCE_LABEL, "page": 1}]
+    top_page = docs[0].metadata.get("page", 1)
+    return [{"label": SOURCE_LABEL, "page": top_page}]
+
+
 def answer_question(question: str) -> dict:
     docs = _retrieve(question)
     context = _format_docs(docs)
@@ -92,15 +97,15 @@ def answer_question(question: str) -> dict:
     chain = ANSWER_PROMPT | get_chat_model() | StrOutputParser()
     answer = chain.invoke({"question": question, "context": context})
 
-    return {"answer": answer, "sources": [CONSTANT_SOURCE]}
+    return {"answer": answer, "sources": _sources_for(docs)}
 
 
 def stream_answer(question: str):
-    """Yields ('sources', list[str]) once, then ('token', str) per generated chunk."""
+    """Yields ('sources', list[dict]) once, then ('token', str) per generated chunk."""
     docs = _retrieve(question)
     context = _format_docs(docs)
 
-    yield "sources", [CONSTANT_SOURCE]
+    yield "sources", _sources_for(docs)
 
     chain = ANSWER_PROMPT | get_chat_model() | StrOutputParser()
     for chunk in chain.stream({"question": question, "context": context}):

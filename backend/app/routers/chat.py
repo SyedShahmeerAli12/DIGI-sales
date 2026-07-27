@@ -14,9 +14,14 @@ class ChatRequest(BaseModel):
     message: str
 
 
+class SourceRef(BaseModel):
+    label: str
+    page: int
+
+
 class ChatResponse(BaseModel):
     answer: str
-    sources: list[str]
+    sources: list[SourceRef]
 
 
 @router.post("", response_model=ChatResponse)

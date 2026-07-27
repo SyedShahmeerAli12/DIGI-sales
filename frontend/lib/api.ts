@@ -1,3 +1,5 @@
+import type { SourceRef } from "./types";
+
 const API_BASE = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:8000";
 const TOKEN_KEY = "digitrends_token";
 
@@ -68,8 +70,25 @@ export async function speakText(text: string): Promise<string> {
   return URL.createObjectURL(blob);
 }
 
+export async function openSourceDocument(page: number): Promise<void> {
+  const token = getToken();
+  if (!token) throw new Error("Not authenticated.");
+
+  const res = await fetch(`${API_BASE}/api/sources/source-question`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!res.ok) {
+    throw new Error("Could not load source document.");
+  }
+  const blob = await res.blob();
+  const url = URL.createObjectURL(blob);
+  // Chrome's built-in PDF viewer jumps straight to this page for both http(s)
+  // and blob: URLs when the fragment is present at open time.
+  window.open(`${url}#page=${page}`, "_blank");
+}
+
 interface StreamHandlers {
-  onSources?: (sources: string[]) => void;
+  onSources?: (sources: SourceRef[]) => void;
   onToken?: (text: string) => void;
   onDone?: () => void;
   onError?: (message: string) => void;

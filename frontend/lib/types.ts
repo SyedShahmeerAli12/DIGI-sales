@@ -2,6 +2,7 @@ export type Sender = "user" | "assistant";
 
 export interface SourceRef {
   label: string;
+  page: number;
 }
 
 export interface ChatMessage {

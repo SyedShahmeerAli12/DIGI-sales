@@ -29,7 +29,7 @@ def load_documents() -> list[Document]:
     entries = json.loads(QA_PATH.read_text(encoding="utf-8"))
 
     docs = []
-    for entry in entries:
+    for i, entry in enumerate(entries):
         text = (
             f"Persona: {entry['persona']}\n"
             f"Category: {entry['category']}\n"
@@ -44,6 +44,11 @@ def load_documents() -> list[Document]:
                     "persona": entry["persona"],
                     "category": entry["category"],
                     "question": entry["question"],
+                    # 1-based page number in source_questions_qa.pdf — one page per
+                    # entry, in the same order as this JSON array. Keep the PDF
+                    # regenerated (app.scripts.generate_source_pdf) in lockstep with
+                    # this JSON's order/length or these page numbers go stale.
+                    "page": i + 1,
                 },
             )
         )

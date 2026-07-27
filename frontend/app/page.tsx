@@ -68,10 +68,7 @@ export default function Home() {
 
     streamChat(text, {
       onSources: (sources) => {
-        updateAssistant((m) => ({
-          ...m,
-          sources: sources.map((label) => ({ label })),
-        }));
+        updateAssistant((m) => ({ ...m, sources }));
       },
       onToken: (chunk) => {
         updateAssistant((m) => ({ ...m, text: m.text + chunk }));

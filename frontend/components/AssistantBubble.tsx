@@ -77,7 +77,7 @@ export default function AssistantBubble({ message }: { message: ChatMessage }) {
               </span>
               <div className="flex flex-wrap gap-1.5">
                 {message.sources.map((s) => (
-                  <SourceChip key={s.label} label={s.label} />
+                  <SourceChip key={`${s.label}-${s.page}`} label={s.label} page={s.page} />
                 ))}
               </div>
             </div>

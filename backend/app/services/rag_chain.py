@@ -61,11 +61,11 @@ def _top_k_for(question: str) -> int:
     return 20 if any(kw in lowered for kw in BROAD_KEYWORDS) else 8
 
 
-# Retrieved chunks come from many different section tables even for a narrow
-# question (hybrid search pulls in loosely related rows). Rather than exposing
-# that internal retrieval detail as a citation list, every answer is attributed
-# to a single constant source.
-CONSTANT_SOURCE = "Internal Knowledge"
+# Retrieved chunks come from many different persona/category groups even for a
+# narrow question (hybrid search pulls in loosely related rows). Rather than
+# exposing that internal retrieval detail as a citation list, every answer is
+# attributed to the single source document all chunks were ingested from.
+CONSTANT_SOURCE = "Source Question.docx"
 
 
 def _rewrite_query(question: str) -> str:

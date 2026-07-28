@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Navbar from "@/components/Navbar";
 import Sidebar from "@/components/Sidebar";
@@ -29,6 +29,10 @@ export default function Home() {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [isResponding, setIsResponding] = useState(false);
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
+  // One session per page load, so a refresh starts a fresh conversation for
+  // the backend's memory too — matches the UI, which already resets messages
+  // on reload since they only live in React state.
+  const sessionIdRef = useRef<string>(generateId());
 
   useEffect(() => {
     if (!getToken()) {
@@ -66,7 +70,7 @@ export default function Home() {
       );
     };
 
-    streamChat(text, {
+    streamChat(text, sessionIdRef.current, {
       onSources: (sources) => {
         updateAssistant((m) => ({ ...m, sources }));
       },

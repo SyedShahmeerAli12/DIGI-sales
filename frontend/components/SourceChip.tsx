@@ -1,11 +1,32 @@
 "use client";
 
 import { useState } from "react";
-import { ExternalLink, Loader2 } from "lucide-react";
+import { Database, ExternalLink, Loader2 } from "lucide-react";
 import { openSourceDocument } from "@/lib/api";
 
-export default function SourceChip({ label, page }: { label: string; page: number }) {
+export default function SourceChip({
+  label,
+  page,
+  query,
+}: {
+  label: string;
+  page?: number;
+  query?: string;
+}) {
   const [loading, setLoading] = useState(false);
+
+  if (page === undefined) {
+    // SQL-sourced answer — no PDF to open, just show what was queried.
+    return (
+      <span
+        title={query}
+        className="inline-flex items-center gap-1 rounded-pill border border-brand-red/30 px-2.5 py-1 text-[11px] font-medium text-brand-red"
+      >
+        <Database className="h-3 w-3" />
+        {label}
+      </span>
+    );
+  }
 
   const handleClick = async () => {
     if (loading) return;

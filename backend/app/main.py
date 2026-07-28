@@ -6,6 +6,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.core.config import settings
 from app.routers import auth, chat, sources, voice
 from app.scripts.ingest import run_ingestion
+from app.services.sql_chain import get_vanna
 from app.services.vector_store import collection_exists, wait_for_qdrant
 
 
@@ -15,6 +16,7 @@ async def lifespan(_app: FastAPI):
     if not collection_exists():
         print("Knowledge base collection not found — running ingestion...")
         run_ingestion(force_recreate=False)
+    get_vanna()  # trains the FMCG SQL schema into Qdrant on first run, no-ops after
     yield
 
 

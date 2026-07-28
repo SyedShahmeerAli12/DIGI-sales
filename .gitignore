@@ -15,6 +15,12 @@ __pycache__/
 *.pyc
 .venv/
 
+# Runtime-generated, not a tracked asset — recreated fresh on each deploy
+backend/data/chat_history.db
+
+# TypeScript incremental build cache
+frontend/tsconfig.tsbuildinfo
+
 # OS
 .DS_Store
 Thumbs.db

@@ -1,7 +1,24 @@
-from langchain_core.output_parsers import StrOutputParser
-from langchain_core.prompts import ChatPromptTemplate
+import json
+import re
+from functools import lru_cache
+from pathlib import Path
 
-from app.services.vector_store import get_chat_model, get_vector_store
+from langchain_community.chat_message_histories import SQLChatMessageHistory
+from langchain_core.output_parsers import StrOutputParser
+from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
+
+from app.core.config import settings
+from app.services import sql_chain
+from app.services.vector_store import (
+    DENSE_VECTOR_NAME,
+    get_chat_model,
+    get_embeddings,
+    get_qdrant_client,
+    get_vector_store,
+)
+
+QA_PATH = Path(__file__).resolve().parents[2] / "data" / "source_questions_qa.json"
+HISTORY_DB_PATH = Path(__file__).resolve().parents[2] / "data" / "chat_history.db"
 
 SYSTEM_PROMPT = """You are DIGI, an Intelligent Sales Supervisor assistant for DigiTrends field sales staff.
 
@@ -111,3 +128,130 @@ def stream_answer(question: str):
     for chunk in chain.stream({"question": question, "context": context}):
         if chunk:
             yield "token", chunk
+
+
+# Below FAQ_MATCH_THRESHOLD, try the analytical SQL path first. Deliberately
+# biased toward attempting SQL: if SQL can't answer confidently it falls back
+# to the FAQ answer anyway (verified safety net), so a wrong "try SQL first"
+# guess just costs one extra generation attempt. Going straight to FAQ has no
+# equivalent fallback to SQL, so that mistake is unrecoverable — e.g. "What
+# was our total revenue in Karachi?" scored 0.6174 against the unrelated FAQ
+# question "Which city generated highest revenue?" and would have returned a
+# non-answer despite the real number being available from the SQL database.
+FAQ_MATCH_THRESHOLD = 0.72
+SQL_SOURCE_LABEL = "FMCG Sales Database"
+
+
+def _faq_match_score(question: str) -> float:
+    vec = get_embeddings().embed_query(question)
+    results = get_qdrant_client().query_points(
+        settings.qdrant_collection, query=vec, using=DENSE_VECTOR_NAME, limit=1
+    ).points
+    return results[0].score if results else 0.0
+
+
+def _normalize(text: str) -> str:
+    return re.sub(r"[^\w\s]", "", text.lower()).strip()
+
+
+@lru_cache
+def _known_faq_questions() -> frozenset[str]:
+    entries = json.loads(QA_PATH.read_text(encoding="utf-8"))
+    return frozenset(_normalize(e["question"]) for e in entries)
+
+
+def _is_known_faq_question(question: str) -> bool:
+    """Exact/near-exact match (case/punctuation-insensitive) against the 165
+    curated FAQ questions — guaranteed, zero-risk routing for questions we
+    already have a validated answer for, bypassing embedding-score ambiguity
+    entirely (see FAQ_MATCH_THRESHOLD's note on 'requires management
+    attention' scoring low enough to otherwise get a worse SQL-derived answer
+    for a fundamentally subjective question)."""
+    return _normalize(question) in _known_faq_questions()
+
+
+CONTEXTUALIZE_PROMPT = ChatPromptTemplate.from_messages(
+    [
+        (
+            "system",
+            "Given the conversation history and a new question, rewrite the new "
+            "question as a standalone question that makes sense without the "
+            "history — resolve pronouns and references like 'that', 'what about "
+            "X', 'the same for Y'. If the question is already standalone, return "
+            "it unchanged. Return ONLY the rewritten question, nothing else.",
+        ),
+        MessagesPlaceholder("history"),
+        ("human", "{question}"),
+    ]
+)
+
+
+def _get_history(session_id: str) -> SQLChatMessageHistory:
+    return SQLChatMessageHistory(
+        session_id=session_id, connection=f"sqlite:///{HISTORY_DB_PATH}"
+    )
+
+
+def _resolve_standalone_question(question: str, session_id: str | None) -> str:
+    if not session_id:
+        return question
+    history = _get_history(session_id).messages
+    if not history:
+        return question
+    chain = CONTEXTUALIZE_PROMPT | get_chat_model() | StrOutputParser()
+    return chain.invoke({"history": history, "question": question}).strip()
+
+
+def answer(question: str, session_id: str | None = None) -> dict:
+    """Routes to the FAQ knowledge base when the question closely matches an
+    existing entry; otherwise tries the FMCG analytical database. Falls back
+    to the FAQ answer (never a guess) if SQL can't answer confidently."""
+    standalone = _resolve_standalone_question(question, session_id)
+
+    if _is_known_faq_question(standalone) or _faq_match_score(standalone) >= FAQ_MATCH_THRESHOLD:
+        result = answer_question(standalone)
+    else:
+        sql_result = sql_chain.answer_analytical_question(standalone)
+        if sql_result is not None:
+            result = {
+                "answer": sql_result["answer"],
+                "sources": [{"label": SQL_SOURCE_LABEL, "query": sql_result["sql"]}],
+            }
+        else:
+            result = answer_question(standalone)
+
+    if session_id:
+        history = _get_history(session_id)
+        history.add_user_message(question)
+        history.add_ai_message(result["answer"])
+    return result
+
+
+def stream(question: str, session_id: str | None = None):
+    """Same routing as answer(), but streaming."""
+    standalone = _resolve_standalone_question(question, session_id)
+    full_answer_parts: list[str] = []
+
+    def _record(chunk: str):
+        full_answer_parts.append(chunk)
+        return "token", chunk
+
+    if _is_known_faq_question(standalone) or _faq_match_score(standalone) >= FAQ_MATCH_THRESHOLD:
+        for kind, payload in stream_answer(standalone):
+            yield (kind, payload) if kind != "token" else _record(payload)
+    else:
+        executed = sql_chain.generate_and_execute(standalone)
+        if executed is not None:
+            yield "sources", [{"label": SQL_SOURCE_LABEL, "query": executed["sql"]}]
+            for chunk in sql_chain.stream_analytical_answer(
+                standalone, executed["sql"], executed["result_text"]
+            ):
+                yield _record(chunk)
+        else:
+            for kind, payload in stream_answer(standalone):
+                yield (kind, payload) if kind != "token" else _record(payload)
+
+    if session_id:
+        history = _get_history(session_id)
+        history.add_user_message(question)
+        history.add_ai_message("".join(full_answer_parts))

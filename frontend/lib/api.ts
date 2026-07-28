@@ -94,7 +94,11 @@ interface StreamHandlers {
   onError?: (message: string) => void;
 }
 
-export async function streamChat(message: string, handlers: StreamHandlers) {
+export async function streamChat(
+  message: string,
+  sessionId: string,
+  handlers: StreamHandlers
+) {
   const token = getToken();
   if (!token) {
     handlers.onError?.("Not authenticated.");
@@ -107,7 +111,7 @@ export async function streamChat(message: string, handlers: StreamHandlers) {
       "Content-Type": "application/json",
       Authorization: `Bearer ${token}`,
     },
-    body: JSON.stringify({ message }),
+    body: JSON.stringify({ message, session_id: sessionId }),
   });
 
   if (!res.ok || !res.body) {
@@ -119,25 +123,33 @@ export async function streamChat(message: string, handlers: StreamHandlers) {
   const decoder = new TextDecoder();
   let buffer = "";
 
-  while (true) {
-    const { value, done } = await reader.read();
-    if (done) break;
-    buffer += decoder.decode(value, { stream: true });
+  try {
+    while (true) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
 
-    const events = buffer.split("\n\n");
-    buffer = events.pop() ?? "";
+      const events = buffer.split("\n\n");
+      buffer = events.pop() ?? "";
 
-    for (const raw of events) {
-      const eventLine = raw.split("\n").find((l) => l.startsWith("event:"));
-      const dataLine = raw.split("\n").find((l) => l.startsWith("data:"));
-      if (!eventLine || !dataLine) continue;
+      for (const raw of events) {
+        const eventLine = raw.split("\n").find((l) => l.startsWith("event:"));
+        const dataLine = raw.split("\n").find((l) => l.startsWith("data:"));
+        if (!eventLine || !dataLine) continue;
 
-      const eventName = eventLine.replace("event:", "").trim();
-      const data = JSON.parse(dataLine.replace("data:", "").trim());
+        const eventName = eventLine.replace("event:", "").trim();
+        const data = JSON.parse(dataLine.replace("data:", "").trim());
 
-      if (eventName === "sources") handlers.onSources?.(data.sources);
-      else if (eventName === "token") handlers.onToken?.(data.text);
-      else if (eventName === "done") handlers.onDone?.();
+        if (eventName === "sources") handlers.onSources?.(data.sources);
+        else if (eventName === "token") handlers.onToken?.(data.text);
+        else if (eventName === "error") handlers.onError?.(data.message);
+        else if (eventName === "done") handlers.onDone?.();
+      }
     }
+  } catch {
+    // connection dropped mid-stream (e.g. the backend crashed before it could
+    // send a proper "error" event) — surface it instead of an unhandled
+    // promise rejection in the console.
+    handlers.onError?.("Connection to the assistant was interrupted.");
   }
 }

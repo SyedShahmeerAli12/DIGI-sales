@@ -1,6 +1,8 @@
 "use client";
 
-import { MessageCircle, X } from "lucide-react";
+import Link from "next/link";
+import { usePathname } from "next/navigation";
+import { Database, MessageCircle, X } from "lucide-react";
 import VersionCard from "./VersionCard";
 
 interface SidebarProps {
@@ -9,6 +11,23 @@ interface SidebarProps {
 }
 
 export default function Sidebar({ mobileOpen, onClose }: SidebarProps) {
+  const pathname = usePathname();
+
+  const navItems = [
+    {
+      href: "/",
+      icon: MessageCircle,
+      title: "Chat",
+      subtitle: "Conversational AI Interface",
+    },
+    {
+      href: "/data-overview",
+      icon: Database,
+      title: "Data Overview",
+      subtitle: "What data backs the answers",
+    },
+  ];
+
   const content = (
     <>
       <div className="mb-3 flex items-center justify-between">
@@ -23,20 +42,40 @@ export default function Sidebar({ mobileOpen, onClose }: SidebarProps) {
         </button>
       </div>
 
-      <button
-        type="button"
-        className="flex items-center gap-2.5 rounded-card bg-brand-red px-3.5 py-3 text-left text-white shadow-sm transition-opacity hover:opacity-95"
-      >
-        <span className="flex h-8 w-8 items-center justify-center rounded-full bg-white/15">
-          <MessageCircle className="h-4 w-4" />
-        </span>
-        <span className="flex flex-col">
-          <span className="text-sm font-semibold">Chat</span>
-          <span className="text-[11px] font-medium text-white/85">
-            Conversational AI Interface
-          </span>
-        </span>
-      </button>
+      <div className="flex flex-col gap-2">
+        {navItems.map(({ href, icon: Icon, title, subtitle }) => {
+          const active = pathname === href;
+          return (
+            <Link
+              key={href}
+              href={href}
+              className={`flex items-center gap-2.5 rounded-card px-3.5 py-3 text-left shadow-sm transition-opacity hover:opacity-95 ${
+                active
+                  ? "bg-brand-red text-white"
+                  : "border border-border bg-white text-text-primary"
+              }`}
+            >
+              <span
+                className={`flex h-8 w-8 items-center justify-center rounded-full ${
+                  active ? "bg-white/15" : "bg-bg-page"
+                }`}
+              >
+                <Icon className={`h-4 w-4 ${active ? "" : "text-brand-red"}`} />
+              </span>
+              <span className="flex flex-col">
+                <span className="text-sm font-semibold">{title}</span>
+                <span
+                  className={`text-[11px] font-medium ${
+                    active ? "text-white/85" : "text-text-secondary"
+                  }`}
+                >
+                  {subtitle}
+                </span>
+              </span>
+            </Link>
+          );
+        })}
+      </div>
 
       <div className="mt-auto pt-4">
         <VersionCard />

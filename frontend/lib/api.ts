@@ -1,4 +1,4 @@
-import type { SourceRef } from "./types";
+import type { DataOverview, SourceRef } from "./types";
 
 const API_BASE = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:8000";
 const TOKEN_KEY = "digitrends_token";
@@ -85,6 +85,19 @@ export async function openSourceDocument(page: number): Promise<void> {
   // Chrome's built-in PDF viewer jumps straight to this page for both http(s)
   // and blob: URLs when the fragment is present at open time.
   window.open(`${url}#page=${page}`, "_blank");
+}
+
+export async function getDataOverview(): Promise<DataOverview> {
+  const token = getToken();
+  if (!token) throw new Error("Not authenticated.");
+
+  const res = await fetch(`${API_BASE}/api/sources/overview`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!res.ok) {
+    throw new Error("Could not load data overview.");
+  }
+  return res.json();
 }
 
 interface StreamHandlers {

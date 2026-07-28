@@ -17,3 +17,22 @@ export interface ChatMessage {
   isVoice?: boolean;
   audioUrl?: string;
 }
+
+export interface DataEntity {
+  table: string;
+  label: string;
+  count: number;
+}
+
+export interface DataOverview {
+  faq_knowledge_base: {
+    label: string;
+    total_questions: number;
+    personas: { name: string; count: number }[];
+  };
+  fmcg_database: {
+    label: string;
+    date_range: { start: string; end: string };
+    groups: { name: string; entities: DataEntity[] }[];
+  };
+}

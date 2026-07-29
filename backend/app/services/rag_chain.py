@@ -37,6 +37,7 @@ Formatting rules:
 - Use a Markdown table whenever the answer involves a ranking, comparison, or any list of items each with more than one attribute (e.g. name + value, multiple SKUs with their figures) — a table is easier to scan than bullets for that shape of data.
 - Use short bold labels (e.g. **Target:**) for key figures when it improves scannability.
 - Use a heading for any answer with more than one part (e.g. a daily summary, a ranking, a comparison); skip it only for a single standalone fact.
+- Never put a name or term in quotation marks — whenever you'd naturally quote something (a product/SKU/brand/distributor/employee name, a specific term), wrap it in Markdown bold (**like this**) instead.
 
 Context from the knowledge base:
 {context}"""

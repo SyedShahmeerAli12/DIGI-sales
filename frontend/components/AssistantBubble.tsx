@@ -3,6 +3,7 @@
 import { useRef, useState } from "react";
 import { Bot, Volume2, Loader2, Square } from "lucide-react";
 import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import type { ChatMessage } from "@/lib/types";
 import { speakText } from "@/lib/api";
 import SourceChip from "./SourceChip";
@@ -44,6 +45,7 @@ export default function AssistantBubble({ message }: { message: ChatMessage }) {
         <div className="rounded-bubble border border-border bg-white px-4 py-3 text-sm leading-relaxed text-text-primary">
           <div className="flex flex-col gap-1.5">
             <ReactMarkdown
+              remarkPlugins={[remarkGfm]}
               components={{
                 p: ({ children }) => <p className="my-1">{children}</p>,
                 ul: ({ children }) => (
@@ -55,6 +57,24 @@ export default function AssistantBubble({ message }: { message: ChatMessage }) {
                 li: ({ children }) => <li className="pl-1">{children}</li>,
                 strong: ({ children }) => (
                   <strong className="font-semibold text-text-heading">{children}</strong>
+                ),
+                table: ({ children }) => (
+                  <div className="my-2 overflow-x-auto rounded-btn border border-border">
+                    <table className="w-full border-collapse text-xs">{children}</table>
+                  </div>
+                ),
+                thead: ({ children }) => (
+                  <thead className="bg-bg-page">{children}</thead>
+                ),
+                th: ({ children }) => (
+                  <th className="border-b border-border px-2.5 py-1.5 text-left font-semibold text-text-heading">
+                    {children}
+                  </th>
+                ),
+                td: ({ children }) => (
+                  <td className="border-b border-border-secondary px-2.5 py-1.5 align-top">
+                    {children}
+                  </td>
                 ),
               }}
             >

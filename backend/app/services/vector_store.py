@@ -31,6 +31,15 @@ def get_sparse_embeddings() -> FastEmbedSparse:
 
 @lru_cache
 def get_chat_model() -> ChatOpenAI:
+    if settings.chat_provider == "groq":
+        # Groq's API is OpenAI-compatible, so this is just ChatOpenAI pointed
+        # at a different base_url — no separate SDK needed.
+        return ChatOpenAI(
+            model=settings.groq_chat_model,
+            api_key=settings.groq_api_key,
+            base_url="https://api.groq.com/openai/v1",
+            temperature=0,
+        )
     return ChatOpenAI(
         model=settings.chat_model,
         api_key=settings.openai_api_key,

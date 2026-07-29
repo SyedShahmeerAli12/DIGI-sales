@@ -79,7 +79,21 @@ def _build_schema_documentation() -> str:
         f"DATE('now'), CURRENT_DATE, or datetime('now') — this data is a frozen "
         f"snapshot, not live, so those always resolve to the real live clock instead "
         f"of '{end_date}' and will silently return wrong/empty results as real time "
-        f"moves past this snapshot. Always use the literal '{end_date}' string instead."
+        f"moves past this snapshot. Always use the literal '{end_date}' string instead. "
+        "dim_product.product_name already includes the pack size as part of the same "
+        "string, e.g. 'Surf Excel 1kg', 'Lifebuoy Soap 100g', 'Pepsi 500ml' — it is "
+        "NEVER just the brand name alone. When a question names a specific product "
+        "with its pack/size (e.g. 'Surf Excel 1kg'), match the full string exactly "
+        "against product_name in one condition; do not split it into product_name='Surf "
+        "Excel' AND pack_size='1kg' as if the brand and pack were separate — that "
+        "matches zero rows and silently returns an empty/null result. "
+        "When computing a rate/percentage/fraction of one thing out of a larger total "
+        "(e.g. 'return rate', 'percentage of X'), always LEFT JOIN from the larger/full "
+        "table to the smaller reference table (e.g. fact_invoice_line LEFT JOIN "
+        "fact_returns) and never a plain/INNER JOIN — an INNER JOIN silently restricts "
+        "both sides of the ratio to only the matching rows, which changes the meaning "
+        "of the denominator and produces a wildly wrong percentage even though the "
+        "query runs without error."
     )
 
 ANSWER_PROMPT = ChatPromptTemplate.from_messages(

@@ -9,6 +9,15 @@ class Settings(BaseSettings):
     embedding_model: str = "text-embedding-3-large"
     chat_model: str = "gpt-4o"
 
+    # Chat model provider toggle — "openai" (always used in production) or
+    # "groq" (free/fast, for local testing only, so it doesn't burn paid
+    # OpenAI quota). Embeddings always stay on OpenAI regardless. Groq's API
+    # is OpenAI-compatible, so this reuses ChatOpenAI with a different
+    # base_url — no separate SDK/dependency needed.
+    chat_provider: str = "openai"
+    groq_api_key: str = ""
+    groq_chat_model: str = "llama-3.3-70b-versatile"
+
     # Qdrant
     qdrant_url: str = "http://qdrant:6333"
     qdrant_collection: str = "digi_knowledge_base"

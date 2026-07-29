@@ -5,7 +5,8 @@ from pathlib import Path
 
 from langchain_community.chat_message_histories import SQLChatMessageHistory
 from langchain_core.output_parsers import StrOutputParser
-from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
+from langchain_core.prompts import ChatPromptTemplate
+from pydantic import BaseModel, Field
 
 from app.core.config import settings
 from app.services import sql_chain
@@ -23,11 +24,11 @@ HISTORY_DB_PATH = Path(__file__).resolve().parents[2] / "data" / "chat_history.d
 SYSTEM_PROMPT = """You are DIGI, an Intelligent Sales Supervisor assistant for DigiTrends field sales staff.
 
 Rules you must follow:
-- Answer using only the retrieved knowledge base context below. Do not invent sales figures, policy, or facts not present in the context.
+- Answer using ONLY the retrieved knowledge base context below. Never use outside/general knowledge, training data, or plausible-sounding assumptions to fill a gap the context doesn't cover — this applies to every topic, not just numbers.
+- Before answering, check whether the context actually addresses what was asked. If it doesn't, say plainly that the knowledge base doesn't cover this topic and stop there — do not still produce a reasonable-sounding answer from general knowledge just because you're capable of one.
+- Do not invent sales figures, policies, names, or any other fact not present in the context.
 - Clearly distinguish confirmed facts from recommendations and unverified market feedback.
-- Never authorize a commercial exception (extra discount, free goods, credit terms) that is outside documented policy.
 - Keep answers concise and actionable for a field user; provide deeper detail only if the question asks for analysis or a summary.
-- If the context does not contain the answer, say so plainly instead of guessing.
 - Always answer in the same language the user asked in. If the question is in Urdu (Urdu script or Roman Urdu), answer fully in Urdu, applying the exact same facts, context, and policy logic you would use in English — never a shorter or vaguer answer just because the language changed. If the question is in English, answer in English.
 
 Formatting rules:
@@ -170,20 +171,42 @@ def _is_known_faq_question(question: str) -> bool:
     return _normalize(question) in _known_faq_questions()
 
 
-CONTEXTUALIZE_PROMPT = ChatPromptTemplate.from_messages(
-    [
-        (
-            "system",
-            "Given the conversation history and a new question, rewrite the new "
-            "question as a standalone question that makes sense without the "
-            "history — resolve pronouns and references like 'that', 'what about "
-            "X', 'the same for Y'. If the question is already standalone, return "
-            "it unchanged. Return ONLY the rewritten question, nothing else.",
-        ),
-        MessagesPlaceholder("history"),
-        ("human", "{question}"),
-    ]
+class _StandaloneQuestion(BaseModel):
+    """Structured rewrite output — the model must explicitly declare whether
+    it actually used the history, rather than us reverse-engineering that by
+    diffing text afterward. Two plain-text prompt variants (both official
+    LangChain references) silently pulled the previous turn's city/channel
+    into unrelated new questions on both GPT-4o and Llama-3.3-70b (verified:
+    "How many customers are in the Modern Trade channel?" right after a
+    Lahore question came back with "in Lahore" appended, out of nowhere).
+    Forcing a structured, self-reported decision is the framework-native fix,
+    not a hand-rolled keyword/regex guess about what the model was doing."""
+
+    used_history: bool = Field(
+        description="True only if answering this question actually requires "
+        "resolving something from the prior conversation (a pronoun, 'what "
+        "about X', an implicit continuation of the same topic). False if the "
+        "question is already fully self-contained on its own."
+    )
+    standalone_question: str = Field(
+        description="The question rewritten to be standalone. If used_history "
+        "is False, this MUST be the original question, completely unchanged — "
+        "do not add any scope, place, or category it didn't already have."
+    )
+
+
+REPHRASE_PROMPT = ChatPromptTemplate.from_template(
+    "Given a chat history and the latest user question which might reference "
+    "context in the chat history, decide whether the question actually needs "
+    "the chat history to be understood, and formulate a standalone version.\n\n"
+    "Chat History:\n{chat_history}\n"
+    "Latest question: {input}"
 )
+
+# Only the most recent exchange is passed in — not the whole growing
+# conversation — since even a single prior turn was enough to get spuriously
+# carried into an unrelated new question during testing.
+CONTEXTUALIZE_HISTORY_MESSAGES = 2  # last question + its answer
 
 
 def _get_history(session_id: str) -> SQLChatMessageHistory:
@@ -192,14 +215,29 @@ def _get_history(session_id: str) -> SQLChatMessageHistory:
     )
 
 
+def _format_history(messages) -> str:
+    return "\n".join(
+        f"{'Human' if m.type == 'human' else 'Assistant'}: {m.content}" for m in messages
+    )
+
+
 def _resolve_standalone_question(question: str, session_id: str | None) -> str:
+    """Mirrors create_history_aware_retriever's own branch: no history means
+    no rewrite at all — the question is used exactly as typed, never passed
+    through the LLM, so there's zero chance of it injecting anything."""
     if not session_id:
         return question
     history = _get_history(session_id).messages
     if not history:
         return question
-    chain = CONTEXTUALIZE_PROMPT | get_chat_model() | StrOutputParser()
-    return chain.invoke({"history": history, "question": question}).strip()
+    recent_history = history[-CONTEXTUALIZE_HISTORY_MESSAGES:]
+    chain = REPHRASE_PROMPT | get_chat_model().with_structured_output(_StandaloneQuestion)
+    result: _StandaloneQuestion = chain.invoke(
+        {"chat_history": _format_history(recent_history), "input": question}
+    )
+    if not result.used_history:
+        return question
+    return result.standalone_question
 
 
 def answer(question: str, session_id: str | None = None) -> dict:
